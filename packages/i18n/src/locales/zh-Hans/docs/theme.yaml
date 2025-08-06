@@ -1,48 +1,48 @@
 doc:
   outline:
-    title: On this page
+    title: 本页大纲
   community:
-    title: Community
+    title: 社群
     edit:
-      title: Edit this page
+      title: 编辑此页面
     star-github:
-      title: Star on GitHub
+      title: 给 GitHub 点个 Star
     discord:
-      title: Chat on Discord
+      title: Discord 服务器
     support:
-      title: Support the project
+      title: 支持我们
   next-page:
-    title: Next page
+    title: 下一页
   previous-page:
-    title: Previous page
+    title: 前一页
 home:
   subtitle: >-
-    Re-creating Neuro-sama, a container of souls of AI waifu / virtual characters to bring them into our worlds.
+    模型驱动的灵魂容器，什么都能做一点的桌宠：让 Neuro-sama 这样的虚拟伴侣也成为我们世界中的一份子吧！
   download:
-    title: Download
+    title: 下载
   get-started:
-    title: Get Started
+    title: 教程
   try-live:
-    title: Try Live
+    title: 网页版
 search:
-  title: Search
-  placeholder: Search documentation...
+  title: 搜索
+  placeholder: 搜索文档...
 navbar:
   appearance:
-    title: Appearance
+    title: 主题
   language:
-    title: Language
+    title: 语言
 pages:
   characters:
-    title: Characters
+    title: 角色
 blog:
-  title: Blog & DevLogs
-  subtitle: Follow our journey and get the latest updates from the development team.
+  title: 文章 & 开发日志
+  subtitle: 和我们一起旅行！阅读从开发团队发布的最新进展
   card:
     post:
       read-more:
-        title: Read more
-  no-posts: No posts found in this category.
+        title: 阅读更多
+  no-posts: 该分类下没有找到任何文章
   categories:
     all: All
     devlog: DevLog
