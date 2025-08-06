@@ -1,8 +1,8 @@
 operations:
-  load-models: Load Models
+  load-models: 加载推理模型
   load-models-status:
-    loading: Loading
-    ready: Ready
+    loading: 加载中
+    ready: 已就绪
 docs:
   theme:
     navbar:
