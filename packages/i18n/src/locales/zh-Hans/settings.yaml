@@ -59,7 +59,7 @@ live2d:
     title: 想切换至3D虚拟形象？
     change-to-vrm: 切换至3D虚拟形象设定页面（VRM）
   theme-color-from-model:
-    title: Extract colors from model
+    title: 从模型中匹配颜色
     button-extract:
       title: 提取
   focus:
@@ -157,10 +157,10 @@ pages:
       section:
         live2d:
           title: Live2D
-          description: Configure Live2D models and settings
+          description: 配置 Live2D 模型和设置
         vrm:
           title: VRM
-          description: Configure 3D VRM models and settings
+          description: 配置 3D VRM 模型和设置
         scene: 场景
   modules:
     consciousness:
