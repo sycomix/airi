@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const resolveAnimation = ref<() => void>()
 const { t } = useI18n()
+
 const settingsStore = useSettings()
 
 const removeBeforeEach = router.beforeEach(async (_, __, next) => {
