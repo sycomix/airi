@@ -1,36 +1,12 @@
 import type { Lifecycle } from './builtin'
 
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createContainer, invoke, lifecycle, normalizeName, normalizeProvideOption, provide, start, stop } from './scoped'
+import { invoke, provide, resetContainer, start, stop } from './global'
+import { lifecycle } from './scoped'
 
-describe('normalizeName', () => {
-  it('should normalize names correctly', () => {
-    expect(normalizeName('simpleName')).toBe('simpleName')
-    expect(normalizeName({ key: 'objectName' })).toBe('objectName')
-  })
-})
-
-describe('normalizeProvideOption', () => {
-  it('should normalize provide options correctly', () => {
-    expect(() => normalizeProvideOption('simpleName')).toThrowError('When using provide(...) as named callback, the second argument must be either a valid ProvideOptionObject<T, D> or a ProvideOptionFunc<T, D>.')
-    expect(() => normalizeProvideOption({ key: 'objectName' })).toThrowError('When using provide(...) as typed ProvideOptionWithKeys<T, D, Key> callback, the second argument must be either a valid ProvideOptionObject<T, D> or a ProvideOptionFunc<T, D>.')
-
-    const namedOption = normalizeProvideOption('name', () => {})
-    expect(namedOption).toBeTypeOf('object')
-    expect(namedOption).toHaveProperty('build')
-    expect(() => namedOption.build({} as any)).not.toThrow()
-
-    const typedOption = normalizeProvideOption({ key: 'name' }, () => {})
-    expect(typedOption).toBeTypeOf('object')
-    expect(typedOption).toHaveProperty('build')
-    expect(() => typedOption.build({} as any)).not.toThrow()
-
-    const autoNameOption = normalizeProvideOption(() => {})
-    expect(autoNameOption).toBeTypeOf('object')
-    expect(autoNameOption).toHaveProperty('build')
-    expect(() => autoNameOption.build({} as any)).not.toThrow()
-  })
+beforeEach(() => {
+  resetContainer()
 })
 
 describe('workflow with named', () => {
@@ -64,25 +40,23 @@ describe('workflow with named', () => {
       return server
     }
 
-    const app = createContainer()
-
-    provide<{ lifecycle: Lifecycle }>(app, 'db', {
+    provide<{ lifecycle: Lifecycle }>('db', {
       dependsOn: { lifecycle: 'lifecycle' },
       build: async ({ dependsOn }) => createDatabase({ lifecycle: dependsOn.lifecycle }),
     })
 
-    provide<{ database: Database, lifecycle: Lifecycle }>(app, 'ws', {
+    provide<{ database: Database, lifecycle: Lifecycle }>('ws', {
       dependsOn: { database: 'db', lifecycle: 'lifecycle' },
       build: async ({ dependsOn }) => createWebSocketServer({ database: dependsOn.database, lifecycle: dependsOn.lifecycle }),
     })
 
-    invoke<{ webSocketServer: WebSocketServer }>(app, {
+    invoke<{ webSocketServer: WebSocketServer }>({
       dependsOn: { webSocketServer: 'ws' },
       callback: async ({ webSocketServer }) => await webSocketServer.start(),
     })
 
-    await start(app)
-    await stop(app)
+    await start()
+    await stop()
 
     // eslint-disable-next-line no-lone-blocks
     {
@@ -125,25 +99,23 @@ describe('workflow with typed', () => {
       return server
     }
 
-    const app = createContainer()
-
-    const database = provide(app, 'db', {
+    const database = provide('db', {
       dependsOn: { lifecycle },
       build: async ({ dependsOn }) => createDatabase(dependsOn),
     })
 
-    const webSocketServer = provide(app, 'ws', {
+    const webSocketServer = provide('ws', {
       dependsOn: { database, lifecycle },
       build: async ({ dependsOn }) => createWebSocketServer(dependsOn),
     })
 
-    invoke(app, {
+    invoke({
       dependsOn: { webSocketServer },
       callback: async ({ webSocketServer }) => await webSocketServer.start(),
     })
 
-    await start(app)
-    await stop(app)
+    await start()
+    await stop()
 
     // eslint-disable-next-line no-lone-blocks
     {
@@ -186,25 +158,23 @@ describe('workflow with auto name', () => {
       return server
     }
 
-    const app = createContainer()
-
-    const database = provide(app, {
+    const database = provide({
       dependsOn: { lifecycle },
       build: async ({ dependsOn }) => createDatabase(dependsOn),
     })
 
-    const webSocketServer = provide(app, {
+    const webSocketServer = provide({
       dependsOn: { database, lifecycle },
       build: async ({ dependsOn }) => createWebSocketServer(dependsOn),
     })
 
-    invoke(app, {
+    invoke({
       dependsOn: { webSocketServer },
       callback: async ({ webSocketServer }) => await webSocketServer.start(),
     })
 
-    await start(app)
-    await stop(app)
+    await start()
+    await stop()
 
     // eslint-disable-next-line no-lone-blocks
     {
