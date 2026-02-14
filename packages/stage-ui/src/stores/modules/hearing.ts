@@ -3,13 +3,14 @@ import type { WithUnknown } from '@xsai/shared'
 import type { StreamTranscriptionResult, StreamTranscriptionOptions as XSAIStreamTranscriptionOptions } from '@xsai/stream-transcription'
 
 import { tryCatch } from '@moeru/std'
+import { useLocalStorageManualReset } from '@proj-airi/stage-shared/composables'
+import { refManualReset } from '@vueuse/core'
 import { generateTranscription } from '@xsai/generate-transcription'
 import { defineStore, storeToRefs } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
 import vadWorkletUrl from '../../workers/vad/process.worklet?worker&url'
 
-import { createResettableLocalStorage, createResettableRef } from '../../utils/resettable'
 import { useProvidersStore } from '../providers'
 import { streamAliyunTranscription } from '../providers/aliyun/stream-transcription'
 import { streamWebSpeechAPITranscription } from '../providers/web-speech-api'
@@ -49,12 +50,12 @@ export const useHearingStore = defineStore('hearing-store', () => {
   const { allAudioTranscriptionProvidersMetadata } = storeToRefs(providersStore)
 
   // State
-  const [activeTranscriptionProvider, resetActiveTranscriptionProvider] = createResettableLocalStorage('settings/hearing/active-provider', '')
-  const [activeTranscriptionModel, resetActiveTranscriptionModel] = createResettableLocalStorage('settings/hearing/active-model', '')
-  const [activeCustomModelName, resetActiveCustomModelName] = createResettableLocalStorage('settings/hearing/active-custom-model', '')
-  const [transcriptionModelSearchQuery, resetTranscriptionModelSearchQuery] = createResettableRef('')
-  const [autoSendEnabled, resetAutoSendEnabled] = createResettableLocalStorage('settings/hearing/auto-send-enabled', false)
-  const [autoSendDelay, resetAutoSendDelay] = createResettableLocalStorage('settings/hearing/auto-send-delay', 2000) // Default 2 seconds
+  const activeTranscriptionProvider = useLocalStorageManualReset('settings/hearing/active-provider', '')
+  const activeTranscriptionModel = useLocalStorageManualReset('settings/hearing/active-model', '')
+  const activeCustomModelName = useLocalStorageManualReset('settings/hearing/active-custom-model', '')
+  const transcriptionModelSearchQuery = refManualReset<string>('')
+  const autoSendEnabled = useLocalStorageManualReset<boolean>('settings/hearing/auto-send-enabled', false)
+  const autoSendDelay = useLocalStorageManualReset<number>('settings/hearing/auto-send-delay', 2000) // Default 2 seconds
 
   // Computed properties
   const availableProvidersMetadata = computed(() => allAudioTranscriptionProvidersMetadata.value)
@@ -100,16 +101,23 @@ export const useHearingStore = defineStore('hearing-store', () => {
       return true // Web Speech API is ready if provider is selected and available
     }
 
-    return !!activeTranscriptionModel.value
+    // For OpenAI Compatible providers, check provider config as fallback
+    let hasProviderModel = false
+    if (activeTranscriptionProvider.value === 'openai-compatible-audio-transcription') {
+      const providerConfig = providersStore.getProviderConfig(activeTranscriptionProvider.value)
+      hasProviderModel = !!providerConfig?.model
+    }
+
+    return !!activeTranscriptionModel.value || hasProviderModel
   })
 
   function resetState() {
-    resetActiveTranscriptionProvider()
-    resetActiveTranscriptionModel()
-    resetActiveCustomModelName()
-    resetTranscriptionModelSearchQuery()
-    resetAutoSendEnabled()
-    resetAutoSendDelay()
+    activeTranscriptionProvider.reset()
+    activeTranscriptionModel.reset()
+    activeCustomModelName.reset()
+    transcriptionModelSearchQuery.reset()
+    autoSendEnabled.reset()
+    autoSendDelay.reset()
   }
 
   async function transcription(
@@ -576,16 +584,30 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
 
       const idleTimeout = options?.idleTimeoutMs ?? DEFAULT_STREAM_IDLE_TIMEOUT
 
-      // If a session already exists, just bump the idle timer and reuse the websocket/audio graph.
+      // If a session exists, reuse it unless new callbacks are provided.
+      // The stream reader captures callbacks at creation time, so updated callbacks
+      // require restarting the session to create a new reader.
       const existingSession = streamingSession.value
       if (existingSession) {
-        if (existingSession.idleTimer) {
-          clearTimeout(existingSession.idleTimer)
-          existingSession.idleTimer = setTimeout(async () => {
-            await stopStreamingTranscription(false, existingSession.providerId)
-          }, idleTimeout)
+        const hasNewCallbacks
+          = options?.onSentenceEnd !== undefined
+            || options?.onSpeechEnd !== undefined
+
+        if (hasNewCallbacks) {
+          console.info('[Hearing Pipeline] New callbacks provided, restarting session')
+          await stopStreamingTranscription(false, existingSession.providerId)
+          // Fall through to create a new session with updated callbacks
         }
-        return
+        else {
+          // No callback changes: refresh idle timer and reuse session
+          if (existingSession.idleTimer) {
+            clearTimeout(existingSession.idleTimer)
+            existingSession.idleTimer = setTimeout(async () => {
+              await stopStreamingTranscription(false, existingSession.providerId)
+            }, idleTimeout)
+          }
+          return
+        }
       }
 
       const abortController = new AbortController()
@@ -633,11 +655,23 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
         result,
         idleTimer,
         providerId,
+        callbacks: {
+          onSentenceEnd: options?.onSentenceEnd,
+          onSpeechEnd: options?.onSpeechEnd,
+        },
       }
 
       // Stream out text deltas to caller without tearing down the session.
       if (result.mode === 'stream' && result.textStream) {
         void (async () => {
+          // Capture callbacks from the session at the time the reader is created
+          // This prevents cross-session leakage if the session is restarted before
+          // this reader finishes (e.g., when navigating between pages or callbacks change)
+          const sessionCallbacks = {
+            onSentenceEnd: streamingSession.value?.callbacks?.onSentenceEnd,
+            onSpeechEnd: streamingSession.value?.callbacks?.onSpeechEnd,
+          }
+
           let fullText = ''
           try {
             const reader = result.textStream.getReader()
@@ -648,7 +682,8 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
                 break
               if (value) {
                 fullText += value
-                options?.onSentenceEnd?.(value)
+                // Use captured callbacks to avoid cross-session leakage
+                sessionCallbacks.onSentenceEnd?.(value)
               }
             }
           }
@@ -656,7 +691,8 @@ export const useHearingSpeechInputPipeline = defineStore('modules:hearing:speech
             console.error('Error reading text stream:', err)
           }
           finally {
-            options?.onSpeechEnd?.(fullText)
+            // Use captured callbacks to avoid cross-session leakage
+            sessionCallbacks.onSpeechEnd?.(fullText)
           }
         })()
       }
